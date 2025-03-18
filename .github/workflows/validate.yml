@@ -1,0 +1,57 @@
+name: Data Validation Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  validate-data:
+    runs-on: windows-latest  # Utilise Windows comme environnement
+
+    permissions:
+      issues: write  # Permet l'ajout de commentaires sur les issues
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v3
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: pip install pandas
+
+      - name: Run validation
+        run: python validate_data.py
+
+      - name: Upload errors (if any)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-errors
+          path: validation_errors.txt
+        continue-on-error: true  # Évite l'arrêt si le fichier n'existe pas
+
+      - name: Upload success message (if passed)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-success
+          path: validation_success.txt
+        continue-on-error: true
+
+      - name: Notify team on failure
+        if: failure()
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}  # Utilise GITHUB_TOKEN pour commenter
+          script: |
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: 1,
+              body: "🚨 Une erreur a été détectée dans le workflow !"
+            });
